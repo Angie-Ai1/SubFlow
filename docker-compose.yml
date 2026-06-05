@@ -1,0 +1,70 @@
+services:
+
+  # ── MySQL ──────────────────────────────────────────────────────────────────
+  db:
+    image: mysql:8.4
+    container_name: subflow_db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "3307:3306"          # host 3306 occupied by local mysqld; use 3307 externally
+    volumes:
+      - ./data/mysql:/var/lib/mysql          # persist data locally
+      - ./database/init:/docker-entrypoint-initdb.d  # run *.sql on first start
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - subflow_net
+
+  # ── Application (FastAPI + LINE Bot webhook) ───────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: subflow_app
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    volumes:
+      - .:/workspace                        # live-reload in development
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - subflow_net
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ── Streamlit dashboard ────────────────────────────────────────────────────
+  dashboard:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: subflow_dashboard
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${STREAMLIT_SERVER_PORT:-8501}:8501"
+    volumes:
+      - .:/workspace
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - subflow_net
+    command: streamlit run app/dashboard/main.py --server.address 0.0.0.0 --server.port 8501
+
+networks:
+  subflow_net:
+    driver: bridge
+
+volumes:
+  mysql_data:
