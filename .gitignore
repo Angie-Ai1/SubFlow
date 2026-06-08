@@ -73,3 +73,10 @@ htmlcov/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local planning & learning docs (covered by logs/ above)
+logs/claude_sessions/
+
+# Local scripts (recording & run helpers, not for repo)
+record_claude.ps1
+run.ps1
