@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
 
@@ -12,12 +12,24 @@ logger = get_logger(__name__)
 
 
 @dataclass
+class ProposedChange:
+    subscription_id: int
+    subscription_name: str
+    current_amount: float
+    current_currency: str
+    new_amount: float
+    new_currency: str
+    raw_subject: str
+
+
+@dataclass
 class ImportResult:
     total_fetched: int
     parsed: int
     inserted: int
     skipped_duplicate: int
     skipped_no_amount: int
+    proposed_changes: list = field(default_factory=list)  # list[ProposedChange]
 
 
 def run_gmail_import(db: Session, max_results: int = 100) -> ImportResult:
@@ -33,6 +45,9 @@ def run_gmail_import(db: Session, max_results: int = 100) -> ImportResult:
         skipped_no_amount=0,
     )
 
+    # keyed by subscription_id so only the latest proposed change per sub is kept
+    _proposed: dict[int, ProposedChange] = {}
+
     for email in emails:
         receipt = parse_receipt(email)
 
@@ -47,17 +62,21 @@ def run_gmail_import(db: Session, max_results: int = 100) -> ImportResult:
             logger.debug("Duplicate gmail_message_id=%s, skipping", receipt.message_id)
             continue
 
-        _save_receipt(db, receipt)
+        proposed = _save_receipt(db, receipt)
+        if proposed:
+            _proposed[proposed.subscription_id] = proposed
         result.inserted += 1
 
     db.commit()
+    result.proposed_changes = list(_proposed.values())
     logger.info(
-        "Gmail import done | fetched=%d parsed=%d inserted=%d dup=%d no_amount=%d",
+        "Gmail import done | fetched=%d parsed=%d inserted=%d dup=%d no_amount=%d changes=%d",
         result.total_fetched,
         result.parsed,
         result.inserted,
         result.skipped_duplicate,
         result.skipped_no_amount,
+        len(result.proposed_changes),
     )
     return result
 
@@ -72,8 +91,23 @@ def _is_duplicate(db: Session, message_id: str) -> bool:
     ) is not None
 
 
-def _save_receipt(db: Session, receipt: ParsedReceipt) -> None:
-    subscription = _find_or_create_subscription(db, receipt)
+def _save_receipt(db: Session, receipt: ParsedReceipt) -> ProposedChange | None:
+    subscription, is_existing = _find_or_create_subscription(db, receipt)
+
+    proposed = None
+    if is_existing and subscription.is_active:
+        amount_diff = abs(float(receipt.amount) - float(subscription.amount)) > 0.01
+        currency_diff = receipt.currency != subscription.currency
+        if amount_diff or currency_diff:
+            proposed = ProposedChange(
+                subscription_id=subscription.id,
+                subscription_name=subscription.name,
+                current_amount=float(subscription.amount),
+                current_currency=subscription.currency,
+                new_amount=float(receipt.amount),
+                new_currency=receipt.currency,
+                raw_subject=receipt.raw_subject,
+            )
 
     record = BillingRecord(
         subscription_id=subscription.id,
@@ -91,10 +125,13 @@ def _save_receipt(db: Session, receipt: ParsedReceipt) -> None:
         receipt.amount,
         receipt.currency,
     )
+    return proposed
 
 
-def _find_or_create_subscription(db: Session, receipt: ParsedReceipt) -> Subscription:
-    """Match by service name (case-insensitive). Create a stub if not found."""
+def _find_or_create_subscription(
+    db: Session, receipt: ParsedReceipt
+) -> tuple[Subscription, bool]:
+    """Return (subscription, is_existing). Creates a stub if not found."""
     name_lower = receipt.service_name.lower()
     subscription = (
         db.query(Subscription)
@@ -103,9 +140,8 @@ def _find_or_create_subscription(db: Session, receipt: ParsedReceipt) -> Subscri
     )
 
     if subscription:
-        return subscription
+        return subscription, True
 
-    # Auto-create a minimal subscription stub; user can fill details in dashboard
     subscription = Subscription(
         name=receipt.service_name,
         amount=float(receipt.amount),
@@ -113,6 +149,6 @@ def _find_or_create_subscription(db: Session, receipt: ParsedReceipt) -> Subscri
         is_active=True,
     )
     db.add(subscription)
-    db.flush()  # get subscription.id before creating BillingRecord
+    db.flush()
     logger.info("Auto-created subscription stub: %r", receipt.service_name)
-    return subscription
+    return subscription, False
