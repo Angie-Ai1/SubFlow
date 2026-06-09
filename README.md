@@ -20,6 +20,14 @@ cd subflow
 docker compose up -d --build
 ```
 
+```bash
+# 確認服務狀態（三個服務都應顯示 running）
+docker compose ps
+
+# 查看啟動日誌（若服務沒反應可用此除錯）
+docker compose logs -f app
+```
+
 完成後開啟：
 - **後台**：http://localhost:8501
 - **API**：http://localhost:8000/docs
