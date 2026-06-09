@@ -19,9 +19,6 @@ ENV/
 .env
 .python-version
 
-# Poetry
-poetry.lock
-
 # Environment variables
 .env
 .env.local
