@@ -80,7 +80,7 @@ def parse_receipt(email: dict[str, Any]) -> ParsedReceipt | None:
 
     amount, currency = _extract_amount(search_text)
     if amount is None:
-        logger.debug("No amount found in message_id=%s subject=%r", email["message_id"], email["subject"])
+        logger.info("No amount found | subject=%r sender=%r", email["subject"], email["sender"])
         return None
 
     service_name = _extract_service_name(email["sender"], email["subject"])

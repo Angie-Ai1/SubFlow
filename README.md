@@ -12,7 +12,7 @@ SubFlow 的目標是：
 1. **自動擷取**：透過 Gmail API 定期掃描收據郵件，解析金額、服務名稱、計費週期。
 2. **手動補齊**：提供 Streamlit 後台讓使用者手動新增或修正訂閱記錄。
 3. **正規化儲存**：所有資料統一寫入 MySQL，維持一致的資料模型。
-4. **主動通知**：透過 LINE Bot 查詢訂閱清單，後續擴充扣款前提醒功能。
+4. **主動通知**：透過 LINE Bot 查詢訂閱清單、搜尋、停用，並於扣款前主動推播提醒。
 
 ---
 
@@ -27,6 +27,7 @@ SubFlow 的目標是：
 | 資料庫 ORM | SQLAlchemy 2.x + Alembic |
 | 資料庫 | MySQL 8.4 |
 | 管理後台 | Streamlit + Altair |
+| 排程 | APScheduler（每日推播 + 每 6 小時 Gmail 掃描） |
 | 容器化 | Docker + Docker Compose |
 | 套件管理 | Poetry |
 | 代碼風格 | Ruff (linting) + Black (formatting) |
@@ -39,15 +40,16 @@ SubFlow 的目標是：
 ```
 SubFlow/
 ├── app/
-│   ├── main.py             # FastAPI 入口點，掛載所有 router
+│   ├── main.py             # FastAPI 入口點 + APScheduler lifespan
 │   ├── config.py           # Pydantic Settings（讀 .env）
 │   ├── webhook/
-│   │   ├── router.py       # LINE Webhook endpoint
+│   │   ├── router.py       # POST /webhook/callback（LINE Webhook）
 │   │   ├── handlers.py     # FollowEvent / UnfollowEvent / MessageEvent 處理
-│   │   └── line_client.py  # MessagingApi 單例
+│   │   ├── line_client.py  # MessagingApi 單例
+│   │   └── notifier.py     # 排程推播：扣款提醒 / Gmail 掃描觸發
 │   ├── parsers/
-│   │   ├── gmail_auth.py   # OAuth2 / Service Account 認證
-│   │   ├── gmail_fetcher.py# 抓取收據信件（關鍵字過濾）
+│   │   ├── gmail_auth.py   # OAuth2 認證（token 快取 + 自動 refresh）
+│   │   ├── gmail_fetcher.py# 分頁抓取收據信件（最多 2000 封）
 │   │   ├── receipt_parser.py# 解析金額、服務名稱、幣別、日期
 │   │   └── importer.py     # 完整 pipeline：fetch → parse → dedup → save
 │   └── dashboard/
@@ -61,7 +63,7 @@ SubFlow/
 │   └── migrations/         # Alembic migration scripts
 │
 ├── utils/
-│   └── logger_config.py    # 全域 Logger（結構化 JSON 可選）
+│   └── logger_config.py    # 全域 Logger（console + RotatingFile）
 │
 ├── scripts/
 │   └── gmail_scan.py       # 本地 CLI：手動觸發 Gmail 掃描（--dry-run 支援）
@@ -69,13 +71,13 @@ SubFlow/
 ├── docker/
 │   └── Dockerfile
 │
-├── tests/                  # pytest test suite
+├── tests/                  # pytest test suite（48 tests，SQLite in-memory）
 │
 ├── .github/
 │   └── workflows/
 │       └── ci.yml          # Lint → Test pipeline
 │
-├── run.ps1                 # 啟動腳本（api / dashboard / gmail-scan 三模式）
+├── run.ps1                 # 啟動腳本（api / dashboard / gmail-scan / test 四模式）
 ├── docker-compose.yml      # MySQL + App + Dashboard containers
 ├── pyproject.toml          # Poetry deps + Ruff / Black config
 ├── .env.example            # 環境變數範本
@@ -97,7 +99,7 @@ Manual Input (Streamlit Dashboard) ───────────────
 | Method | Path | 說明 |
 |---|---|---|
 | `GET` | `/health` | 服務健康檢查 |
-| `POST` | `/webhook/line` | LINE Webhook callback |
+| `POST` | `/webhook/callback` | LINE Webhook callback |
 | `POST` | `/ops/gmail-import` | 手動觸發 Gmail 收據匯入 |
 
 ### 資料模型
@@ -138,9 +140,15 @@ docker compose up -d --build
 服務啟動後：
 - FastAPI (LINE Webhook)：`http://localhost:8000`
 - Streamlit 後台：`http://localhost:8501`
-- MySQL：`localhost:3306`
+- MySQL：`localhost:3307`
 
-### 3. 本地開發（不使用 Docker）
+### 3. 設定 LINE Webhook
+
+1. 啟動 ngrok：`ngrok http 8000`
+2. 將 ngrok URL + `/webhook/callback` 填入 LINE Developer Console
+3. 在 LINE Official Account Manager 將「回應方式」改為 **Webhook**，並關閉「自動回應訊息」
+
+### 4. 本地開發（不使用 Docker）
 
 **安裝依賴**
 
@@ -163,27 +171,26 @@ poetry install
 **手動觸發 Gmail 掃描**
 
 ```powershell
-.\run.ps1 -Mode gmail-scan -Max 50          # 掃描最近 50 封
+.\run.ps1 -Mode gmail-scan -Max 500         # 掃描最近 500 封
 .\run.ps1 -Mode gmail-scan -DryRun          # 只解析，不寫入 DB
 ```
 
 > 所有執行日誌會同步寫入 `logs/` 目錄。
 
-### 4. 執行測試
+### 5. 執行測試
 
 ```powershell
-.\run.ps1 -Mode api   # 確認環境後 Ctrl+C
-poetry run pytest
+.\run.ps1 -Mode test
 ```
 
-### 5. 代碼風格檢查
+### 6. 代碼風格檢查
 
 ```bash
 poetry run ruff check .
 poetry run black --check .
 ```
 
-### 6. 資料庫 Migration
+### 7. 資料庫 Migration
 
 ```bash
 # 產生新 migration
@@ -202,10 +209,12 @@ poetry run alembic upgrade head
 |---|---|
 | `LINE_CHANNEL_ACCESS_TOKEN` | LINE Bot 長期存取 Token |
 | `LINE_CHANNEL_SECRET` | 用於驗證 Webhook 簽名 |
-| `DATABASE_URL` | SQLAlchemy 連線字串 |
+| `DATABASE_URL` | SQLAlchemy 連線字串（Docker 內用 `db` hostname） |
 | `GOOGLE_CREDENTIALS_PATH` | OAuth2 credentials.json 路徑 |
 | `GOOGLE_TOKEN_PATH` | OAuth token 快取路徑（首次認證後自動產生） |
 | `GMAIL_TARGET_ADDRESS` | 用於掃描收據的 Gmail 信箱 |
+| `NOTIFY_DAYS_ADVANCE` | 扣款前幾天推播提醒（預設 3） |
+| `CRON_NOTIFICATION_HOUR` | 每日推播時間（24h，預設 9） |
 | `LOG_LEVEL` | 日誌等級（DEBUG / INFO / WARNING / ERROR） |
 
 ---
@@ -215,7 +224,13 @@ poetry run alembic upgrade head
 | 輸入 | 功能 |
 |---|---|
 | `訂閱清單` / `清單` / `list` | 列出所有啟用中的訂閱及下次扣款日 |
-| `說明` / `help` / `?` | 顯示指令說明 |
+| `即將到期` / `到期` / `upcoming` | 列出 N 天內扣款的訂閱（N = NOTIFY_DAYS_ADVANCE） |
+| `搜尋 <名稱>` / `search <名稱>` | 模糊搜尋訂閱（含停用中，標記狀態） |
+| `停用 <名稱>` / `disable <名稱>` | 停用符合名稱的啟用中訂閱 |
+| `說明` / `help` / `?` | 顯示完整指令說明 |
+| `選單` / `menu` | 顯示快速按鈕選單 |
+
+Quick Reply 按鈕自動附於說明、選單、錯誤回應等訊息底部。
 
 ---
 

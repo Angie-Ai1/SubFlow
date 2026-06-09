@@ -32,7 +32,7 @@ class ImportResult:
     proposed_changes: list = field(default_factory=list)  # list[ProposedChange]
 
 
-def run_gmail_import(db: Session, max_results: int = 100) -> ImportResult:
+def run_gmail_import(db: Session, max_results: int = 2000) -> ImportResult:
     """Full pipeline: authenticate → fetch → parse → deduplicate → save."""
     service = get_gmail_service()
     emails = fetch_receipt_emails(service, max_results=max_results)

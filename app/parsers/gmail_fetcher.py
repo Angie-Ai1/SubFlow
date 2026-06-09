@@ -16,21 +16,35 @@ _RECEIPT_QUERY = (
 
 def fetch_receipt_emails(
     service,
-    max_results: int = 100,
+    max_results: int = 2000,
     query: str = _RECEIPT_QUERY,
 ) -> list[dict[str, Any]]:
-    """Return a list of raw email dicts matching the receipt query."""
+    """Return a list of raw email dicts matching the receipt query.
+
+    Paginates through Gmail API results up to max_results total.
+    Gmail returns at most 500 per page; we loop until exhausted or cap reached.
+    """
     logger.info("Fetching receipt emails (max=%d)", max_results)
 
-    result = (
-        service.users()
-        .messages()
-        .list(userId="me", q=query, maxResults=max_results)
-        .execute()
-    )
+    message_stubs: list[dict] = []
+    page_token: str | None = None
+    page_size = min(500, max_results)
 
-    message_stubs = result.get("messages", [])
-    logger.info("Found %d candidate emails", len(message_stubs))
+    while len(message_stubs) < max_results:
+        kwargs: dict = {"userId": "me", "q": query, "maxResults": page_size}
+        if page_token:
+            kwargs["pageToken"] = page_token
+
+        result = service.users().messages().list(**kwargs).execute()
+        batch = result.get("messages", [])
+        message_stubs.extend(batch)
+
+        page_token = result.get("nextPageToken")
+        if not page_token or not batch:
+            break
+
+    message_stubs = message_stubs[:max_results]
+    logger.info("Found %d candidate emails across all pages", len(message_stubs))
 
     emails = []
     for stub in message_stubs:
