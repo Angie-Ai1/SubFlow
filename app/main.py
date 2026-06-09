@@ -17,6 +17,23 @@ from utils.logger_config import get_logger
 logger = get_logger(__name__)
 
 
+def _check_required_env() -> None:
+    """Log errors for missing env vars so failures surface at startup, not runtime."""
+    checks = {
+        "LINE_CHANNEL_ACCESS_TOKEN": settings.line_channel_access_token,
+        "LINE_CHANNEL_SECRET": settings.line_channel_secret,
+        "GMAIL_TARGET_ADDRESS": settings.gmail_target_address,
+    }
+    missing = [k for k, v in checks.items() if not v]
+    if missing:
+        for key in missing:
+            logger.error("未設定必要環境變數: %s — 請參考 docs/SETUP.md", key)
+        logger.error(
+            "共 %d 個必要變數未設定，部分功能將無法使用。執行 .\\setup.ps1 可互動式建立 .env",
+            len(missing),
+        )
+
+
 def _with_db(fn):
     """Wrap a scheduled job so it receives a fresh DB session and closes it on exit."""
     def _job():
@@ -39,6 +56,7 @@ async def lifespan(app: FastAPI):
         settings.app_host,
         settings.app_port,
     )
+    _check_required_env()
     if check_connection():
         logger.info("Database connection OK")
     else:

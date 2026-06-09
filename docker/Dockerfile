@@ -26,4 +26,6 @@ RUN poetry install --no-root --no-interaction --no-ansi
 
 COPY . .
 
+RUN chmod +x docker/entrypoint.sh
+
 EXPOSE 8000 8501

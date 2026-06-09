@@ -43,7 +43,8 @@ services:
         condition: service_healthy
     networks:
       - subflow_net
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    entrypoint: ["/bin/sh", "/workspace/docker/entrypoint.sh"]
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
   # ── Streamlit dashboard ────────────────────────────────────────────────────
   dashboard:
