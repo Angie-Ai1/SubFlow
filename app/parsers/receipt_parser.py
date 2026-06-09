@@ -1,6 +1,6 @@
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from email.utils import parsedate_to_datetime
 from typing import Any
@@ -230,4 +230,4 @@ def _parse_date(date_str: str) -> datetime:
         return parsedate_to_datetime(date_str)
     except Exception:
         logger.warning("Could not parse date %r, using now()", date_str)
-        return datetime.now()
+        return datetime.now(timezone.utc)

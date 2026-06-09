@@ -3,7 +3,7 @@
 No DB or network required — all tests run against pure Python logic.
 """
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -264,15 +264,15 @@ class TestParseDate:
         assert dt.month == 6
 
     def test_invalid_date_falls_back_to_current_time(self):
-        before = datetime.now()
+        before = datetime.now(timezone.utc)
         dt = _parse_date("not-a-date-string")
-        after = datetime.now()
+        after = datetime.now(timezone.utc)
         assert before <= dt <= after
 
     def test_empty_date_string_falls_back(self):
-        before = datetime.now()
+        before = datetime.now(timezone.utc)
         dt = _parse_date("")
-        after = datetime.now()
+        after = datetime.now(timezone.utc)
         assert before <= dt <= after
 
 

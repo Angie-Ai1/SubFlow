@@ -21,6 +21,9 @@ async def callback(
 ) -> dict:
     body = await request.body()
 
+    if not x_line_signature.strip():
+        raise HTTPException(status_code=400, detail="Missing signature")
+
     try:
         events = parser.parse(body.decode(), x_line_signature)
     except InvalidSignatureError:

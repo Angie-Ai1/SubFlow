@@ -1,3 +1,7 @@
+import warnings
+from pathlib import Path
+
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -34,6 +38,25 @@ class Settings(BaseSettings):
     # Scheduler / notifications
     notify_days_advance: int = 3
     cron_notification_hour: int = 9
+
+    @model_validator(mode="after")
+    def _warn_credentials_in_project_dir(self) -> "Settings":
+        cwd = Path.cwd().resolve()
+        for path_str, label in [
+            (self.google_credentials_path, "google_credentials_path"),
+            (self.google_token_path, "google_token_path"),
+        ]:
+            try:
+                Path(path_str).resolve().relative_to(cwd)
+                if Path(path_str).exists():
+                    warnings.warn(
+                        f"[SubFlow] {label}={path_str!r} is inside the project directory. "
+                        "Consider moving it to an external path to reduce accidental exposure.",
+                        stacklevel=2,
+                    )
+            except ValueError:
+                pass
+        return self
 
 
 settings = Settings()

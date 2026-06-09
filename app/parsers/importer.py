@@ -48,26 +48,30 @@ def run_gmail_import(db: Session, max_results: int = 2000) -> ImportResult:
     # keyed by subscription_id so only the latest proposed change per sub is kept
     _proposed: dict[int, ProposedChange] = {}
 
-    for email in emails:
-        receipt = parse_receipt(email)
+    try:
+        for email in emails:
+            receipt = parse_receipt(email)
 
-        if receipt is None:
-            result.skipped_no_amount += 1
-            continue
+            if receipt is None:
+                result.skipped_no_amount += 1
+                continue
 
-        result.parsed += 1
+            result.parsed += 1
 
-        if _is_duplicate(db, receipt.message_id):
-            result.skipped_duplicate += 1
-            logger.debug("Duplicate gmail_message_id=%s, skipping", receipt.message_id)
-            continue
+            if _is_duplicate(db, receipt.message_id):
+                result.skipped_duplicate += 1
+                logger.debug("Duplicate gmail_message_id=%s, skipping", receipt.message_id)
+                continue
 
-        proposed = _save_receipt(db, receipt)
-        if proposed:
-            _proposed[proposed.subscription_id] = proposed
-        result.inserted += 1
+            proposed = _save_receipt(db, receipt)
+            if proposed:
+                _proposed[proposed.subscription_id] = proposed
+            result.inserted += 1
 
-    db.commit()
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     result.proposed_changes = list(_proposed.values())
     logger.info(
         "Gmail import done | fetched=%d parsed=%d inserted=%d dup=%d no_amount=%d changes=%d",
