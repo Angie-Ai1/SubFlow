@@ -79,7 +79,7 @@ cp .env.example .env
 poetry install
 
 # 觸發 OAuth 流程：會自動開啟瀏覽器授權，完成後產生 token.json
-.\run.ps1 -Mode gmail-scan -Max 10 -DryRun
+.venv\Scripts\python.exe scripts\gmail_scan.py --max 10 --dry-run
 ```
 
 > `credentials.json` 和 `token.json` 已加入 `.gitignore`，不會上傳 GitHub，每次 clone 後需重新放置。
@@ -130,7 +130,7 @@ curl http://localhost:8000/health
 # → {"status":"ok","env":"development"}
 
 # 執行全套測試
-.\run.ps1 -Mode test
+.venv\Scripts\python.exe -m pytest
 # → 80 passed
 ```
 
@@ -176,13 +176,13 @@ $env:DATABASE_URL = "mysql+pymysql://subflow_user:<密碼>@localhost:3307/subflo
 .venv\Scripts\python.exe -m alembic upgrade head
 
 # 啟動 FastAPI（port 8000）
-.\run.ps1 -Mode api
+.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 # 啟動 Streamlit Dashboard（port 8501）
-.\run.ps1 -Mode dashboard
+.venv\Scripts\python.exe -m streamlit run app/dashboard/main.py
 
 # Gmail 掃描（dry-run）
-.\run.ps1 -Mode gmail-scan -Max 100 -DryRun
+.venv\Scripts\python.exe scripts\gmail_scan.py --max 100 --dry-run
 ```
 
 ---
@@ -211,7 +211,7 @@ docker compose logs app --tail 20
 **重新 clone 後 `token.json` 遺失**
 `token.json` 未納入 git。重新執行一次 Gmail scan dry-run 即可觸發瀏覽器重新授權：
 ```powershell
-.\run.ps1 -Mode gmail-scan -Max 5 -DryRun
+.venv\Scripts\python.exe scripts\gmail_scan.py --max 5 --dry-run
 ```
 
 **啟動時看到 `未設定必要環境變數` 錯誤**
