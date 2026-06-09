@@ -1,5 +1,6 @@
 import base64
 import re
+from email.header import decode_header as _decode_header
 from typing import Any
 
 from utils.logger_config import get_logger
@@ -71,8 +72,8 @@ def _fetch_full_message(service, message_id: str) -> dict[str, Any]:
 
     return {
         "message_id": message_id,
-        "subject": headers.get("Subject", ""),
-        "sender": headers.get("From", ""),
+        "subject": _decode_mime_header(headers.get("Subject", "")),
+        "sender": _decode_mime_header(headers.get("From", "")),
         "date": headers.get("Date", ""),
         "body_text": _extract_body(msg["payload"]),
     }
@@ -85,8 +86,17 @@ def _extract_body(payload: dict) -> str:
     # Leaf node with data
     if "data" in payload.get("body", {}):
         if mime_type in ("text/plain", "text/html"):
+            # Detect charset from Content-Type header of this part
+            charset = "utf-8"
+            for h in payload.get("headers", []):
+                if h["name"].lower() == "content-type":
+                    m = re.search(r'charset=["\']?([^"\';\s>]+)', h["value"], re.IGNORECASE)
+                    if m:
+                        charset = m.group(1).strip()
+                    break
             raw = payload["body"]["data"]
-            decoded = base64.urlsafe_b64decode(raw + "==").decode("utf-8", errors="replace")
+            data = base64.urlsafe_b64decode(raw + "==")
+            decoded = _decode_bytes(data, charset)
             if mime_type == "text/html":
                 decoded = _strip_html(decoded)
             return decoded
@@ -106,9 +116,37 @@ def _extract_body(payload: dict) -> str:
     return ""
 
 
+def _decode_bytes(data: bytes, charset: str) -> str:
+    """Decode bytes using charset; fall back to CJK encodings if invalid bytes detected.
+
+    Some TW emails claim charset=utf-8 but actually contain Big5/CP950 bytes.
+    """
+    for enc in (charset, "big5", "cp950", "gbk"):
+        try:
+            return data.decode(enc)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return data.decode("utf-8", errors="replace")
+
+
+def _decode_mime_header(value: str) -> str:
+    """Decode RFC 2047 encoded header values (e.g. =?big5?B?...?=)."""
+    parts = _decode_header(value)
+    decoded = []
+    for chunk, charset in parts:
+        if isinstance(chunk, bytes):
+            decoded.append(chunk.decode(charset or "utf-8", errors="replace"))
+        else:
+            decoded.append(chunk)
+    return "".join(decoded)
+
+
 def _strip_html(html: str) -> str:
     """Lightweight HTML tag stripper with currency entity decoding."""
-    text = re.sub(r"<[^>]+>", " ", html)
+    # Remove style/script blocks entirely so CSS doesn't pollute parsed text
+    text = re.sub(r"<style[^>]*>.*?</style>", " ", html, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<script[^>]*>.*?</script>", " ", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", " ", text)
     # Common HTML entities
     text = re.sub(r"&nbsp;", " ", text)
     text = re.sub(r"&amp;", "&", text)

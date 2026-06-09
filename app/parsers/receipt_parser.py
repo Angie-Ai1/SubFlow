@@ -37,9 +37,9 @@ _AMOUNT_PATTERNS: list[tuple[str, str]] = [
     (r"(?:USD|US\$)\s*([\d,]+(?:\.\d{1,2})?)", "USD"),
     (r"(?<![A-Za-z])\$\s*([\d,]+\.\d{2})\b", "USD"),  # $X.XX — not preceded by letter (avoids CA$/HK$/A$/S$/C$)
     (r"([\d,]+(?:\.\d{1,2})?)\s*USD", "USD"),
-    # Billing-label anchored $ — allows whole-dollar amounts (e.g. "Total: $9")
+    # Billing-label anchored $ — allows whole-dollar amounts (e.g. "Total: $9", "Total Amount：$1305")
     (
-        r"(?:total|amount\s+due|grand\s+total|charge[sd]?|invoice\s+total|billed|payment)[:\s]+\$\s*([\d,]+(?:\.\d{1,2})?)\b",
+        r"(?:total(?:\s+amount)?|amount\s+due|grand\s+total|charge[sd]?|invoice\s+total|billed|payment)[：:\s]+\$\s*([\d,]+(?:\.\d{1,2})?)\b",
         "USD",
     ),
     # ── EUR ───────────────────────────────────────────────────────────────────
