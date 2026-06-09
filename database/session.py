@@ -1,4 +1,5 @@
 from collections.abc import Generator
+from contextlib import contextmanager
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
@@ -25,6 +26,16 @@ SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 def get_db() -> Generator[Session, None, None]:
     """FastAPI dependency — yields a DB session and closes it on exit."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+@contextmanager
+def get_db_ctx() -> Generator[Session, None, None]:
+    """Context-manager session for non-FastAPI code (scripts, Streamlit, tests)."""
     db = SessionLocal()
     try:
         yield db

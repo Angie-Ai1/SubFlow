@@ -195,6 +195,42 @@ class TestProposedChanges:
 # ── Multiple services ──────────────────────────────────────────────────────────
 
 
+class TestFuzzyMatch:
+    def test_uppercase_existing_subscription_matched_case_insensitively(self, db_session):
+        """_find_or_create_subscription uses ilike — 'NETFLIX' in DB should match email 'Netflix'."""
+        sub = Subscription(
+            name="NETFLIX",
+            amount=100.0,
+            currency="TWD",
+            billing_cycle=BillingCycle.monthly,
+            is_active=True,
+        )
+        db_session.add(sub)
+        db_session.commit()
+
+        result = _run(db_session, [_email()])  # parser extracts service_name="Netflix"
+
+        assert db_session.query(Subscription).count() == 1  # no new stub created
+        assert result.inserted == 1
+
+    def test_partial_name_match_finds_existing_subscription(self, db_session):
+        """'Netflix Premium' in DB should match email 'Netflix' (ilike %netflix%)."""
+        sub = Subscription(
+            name="Netflix Premium",
+            amount=150.0,
+            currency="TWD",
+            billing_cycle=BillingCycle.monthly,
+            is_active=True,
+        )
+        db_session.add(sub)
+        db_session.commit()
+
+        result = _run(db_session, [_email()])
+
+        assert db_session.query(Subscription).count() == 1
+        assert result.inserted == 1
+
+
 class TestMultipleServices:
     def test_different_services_create_separate_stubs(self, db_session):
         emails = [

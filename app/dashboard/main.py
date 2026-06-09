@@ -329,8 +329,8 @@ with tab_bills:
         with st.spinner("掃描中，請稍候…"):
             try:
                 from app.parsers.importer import run_gmail_import
-                from database.session import SessionLocal
-                with SessionLocal() as db:
+                from database.session import get_db_ctx
+                with get_db_ctx() as db:
                     result = run_gmail_import(db)
                 st.success(
                     f"完成：抓取 {result.total_fetched} 封 ／ "

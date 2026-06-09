@@ -34,7 +34,7 @@ class ImportResult:
     inserted: int
     skipped_duplicate: int
     skipped_no_amount: int
-    proposed_changes: list = field(default_factory=list)  # list[ProposedChange]
+    proposed_changes: list[ProposedChange] = field(default_factory=list)
 
 
 def run_gmail_import(db: Session, max_results: int = 2000) -> ImportResult:

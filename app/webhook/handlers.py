@@ -19,6 +19,20 @@ logger = get_logger(__name__)
 
 _MAX_INPUT_LEN = 100
 
+# ── Command keywords & quick reply labels ─────────────────────────────────────
+_CMD_LIST     = "訂閱清單"
+_CMD_UPCOMING = "即將到期"
+_CMD_SEARCH   = "搜尋"
+_CMD_DISABLE  = "停用"
+_CMD_HELP     = "說明"
+_CMD_MENU     = "選單"
+
+_LBL_LIST     = "📋 訂閱清單"
+_LBL_UPCOMING = "⏰ 即將到期"
+_LBL_SEARCH   = "🔍 搜尋訂閱"
+_LBL_DISABLE  = "⏸ 停用訂閱"
+_LBL_HELP     = "❓ 使用說明"
+
 _WELCOME = (
     "歡迎使用 SubFlow 訂閱管理！\n\n"
     "📋 訂閱清單 — 查看所有啟用中訂閱\n"
@@ -46,11 +60,11 @@ def _help_text() -> str:
 def _main_quick_reply() -> QuickReply:
     return QuickReply(
         items=[
-            QuickReplyItem(action=MessageAction(label="📋 訂閱清單", text="訂閱清單")),
-            QuickReplyItem(action=MessageAction(label="⏰ 即將到期", text="即將到期")),
-            QuickReplyItem(action=MessageAction(label="🔍 搜尋訂閱", text="搜尋")),
-            QuickReplyItem(action=MessageAction(label="⏸ 停用訂閱", text="停用")),
-            QuickReplyItem(action=MessageAction(label="❓ 使用說明", text="說明")),
+            QuickReplyItem(action=MessageAction(label=_LBL_LIST,     text=_CMD_LIST)),
+            QuickReplyItem(action=MessageAction(label=_LBL_UPCOMING, text=_CMD_UPCOMING)),
+            QuickReplyItem(action=MessageAction(label=_LBL_SEARCH,   text=_CMD_SEARCH)),
+            QuickReplyItem(action=MessageAction(label=_LBL_DISABLE,  text=_CMD_DISABLE)),
+            QuickReplyItem(action=MessageAction(label=_LBL_HELP,     text=_CMD_HELP)),
         ]
     )
 
@@ -122,39 +136,39 @@ def _dispatch_command(text: str, db: Session) -> TextMessage:
     normalized = text.lower()
 
     # ── 說明 ──────────────────────────────────────────────────────────────────
-    if normalized in ("說明", "help", "?", "？"):
+    if normalized in (_CMD_HELP, "help", "?", "？"):
         return _msg(_help_text(), menu=True)
 
     # ── 選單 ──────────────────────────────────────────────────────────────────
-    if normalized in ("選單", "menu", "菜單"):
+    if normalized in (_CMD_MENU, "menu", "菜單"):
         return _msg("請選擇功能：", menu=True)
 
     # ── 訂閱清單 ──────────────────────────────────────────────────────────────
-    if normalized in ("訂閱清單", "清單", "list"):
+    if normalized in (_CMD_LIST, "清單", "list"):
         return _msg(_build_subscription_list(db))
 
     # ── 即將到期 ──────────────────────────────────────────────────────────────
-    if normalized in ("即將到期", "到期", "upcoming"):
+    if normalized in (_CMD_UPCOMING, "到期", "upcoming"):
         return _msg(_build_upcoming_list(db))
 
     # ── 搜尋 <keyword> ────────────────────────────────────────────────────────
-    if normalized.startswith("搜尋") or normalized.startswith("search"):
-        prefix = "搜尋" if normalized.startswith("搜尋") else "search"
+    if normalized.startswith(_CMD_SEARCH) or normalized.startswith("search"):
+        prefix = _CMD_SEARCH if normalized.startswith(_CMD_SEARCH) else "search"
         keyword = text[len(prefix):].strip()
         if not keyword:
-            return _msg("請輸入搜尋關鍵字，範例：\n搜尋 Netflix", menu=True)
+            return _msg(f"請輸入搜尋關鍵字，範例：\n{_CMD_SEARCH} Netflix", menu=True)
         return _msg(_search_subscriptions(db, keyword))
 
     # ── 停用 <keyword> ────────────────────────────────────────────────────────
-    if normalized.startswith("停用") or normalized.startswith("disable"):
-        prefix = "停用" if normalized.startswith("停用") else "disable"
+    if normalized.startswith(_CMD_DISABLE) or normalized.startswith("disable"):
+        prefix = _CMD_DISABLE if normalized.startswith(_CMD_DISABLE) else "disable"
         keyword = text[len(prefix):].strip()
         if not keyword:
-            return _msg("請輸入要停用的訂閱名稱，範例：\n停用 Netflix", menu=True)
+            return _msg(f"請輸入要停用的訂閱名稱，範例：\n{_CMD_DISABLE} Netflix", menu=True)
         return _msg(_deactivate_subscription(db, keyword), menu=True)
 
     # ── 未知指令 ──────────────────────────────────────────────────────────────
-    return _msg(f"未知指令：「{text}」\n\n輸入「說明」查看可用指令，或點選下方按鈕。", menu=True)
+    return _msg(f"未知指令：「{text}」\n\n輸入「{_CMD_HELP}」查看可用指令，或點選下方按鈕。", menu=True)
 
 
 # ── Query helpers ─────────────────────────────────────────────────────────────
