@@ -152,9 +152,22 @@ CRON_NOTIFICATION_HOUR=9
 # ── 5. 完成提示 ───────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host ".env 已成功建立！" -ForegroundColor Green
+
+# 檢查 credentials.json 是否已就位
+if (-not (Test-Path "credentials.json")) {
+    Write-Host ""
+    Write-Host "  ⚠  尚未偵測到 credentials.json" -ForegroundColor Yellow
+    Write-Host "     請將 Google Cloud Console 下載的 OAuth 憑證檔案"
+    Write-Host "     重新命名為 credentials.json 並放到專案根目錄，"
+    Write-Host "     否則 Gmail 掃描功能將無法運作。"
+    Write-Host "     取得方式：docs/SETUP.md → Step 4"
+} else {
+    Write-Host "  ✓ credentials.json 已就位。" -ForegroundColor Green
+}
+
 Write-Host ""
 Write-Host "接下來的步驟："
-Write-Host "  1. 將 credentials.json 放到專案根目錄（Gmail OAuth 憑證）"
+Write-Host "  1. 確認 credentials.json 已放到專案根目錄（Gmail OAuth 憑證）"
 Write-Host "  2. docker compose up -d --build"
 Write-Host "  3. 在 LINE Developers Console 設定 Webhook URL（需搭配 ngrok）"
 Write-Host ""
