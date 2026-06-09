@@ -107,10 +107,23 @@ def _extract_body(payload: dict) -> str:
 
 
 def _strip_html(html: str) -> str:
-    """Very lightweight HTML tag stripper."""
+    """Lightweight HTML tag stripper with currency entity decoding."""
     text = re.sub(r"<[^>]+>", " ", html)
+    # Common HTML entities
     text = re.sub(r"&nbsp;", " ", text)
     text = re.sub(r"&amp;", "&", text)
     text = re.sub(r"&lt;", "<", text)
     text = re.sub(r"&gt;", ">", text)
+    text = re.sub(r"&quot;", '"', text)
+    # Currency symbol entities (prevents $, £, ¥, € from vanishing after strip)
+    text = re.sub(r"&#36;|&dollar;", "$", text)
+    text = re.sub(r"&#163;|&pound;", "£", text)
+    text = re.sub(r"&#165;|&yen;", "¥", text)
+    text = re.sub(r"&#8364;|&euro;", "€", text)
+    text = re.sub(r"&#8361;|&won;", "₩", text)
+    # Numeric hex entities for the same symbols
+    text = re.sub(r"&#x24;", "$", text)
+    text = re.sub(r"&#xa3;", "£", text, flags=re.IGNORECASE)
+    text = re.sub(r"&#xa5;", "¥", text, flags=re.IGNORECASE)
+    text = re.sub(r"&#x20ac;", "€", text, flags=re.IGNORECASE)
     return re.sub(r"\s{2,}", " ", text).strip()

@@ -1,4 +1,4 @@
-"""Unit tests for app/parsers/receipt_parser.py.
+"""Unit tests for app/parsers/receipt_parser.py and gmail_fetcher._strip_html.
 
 No DB or network required — all tests run against pure Python logic.
 """
@@ -13,6 +13,7 @@ from app.parsers.receipt_parser import (
     _parse_date,
     parse_receipt,
 )
+from app.parsers.gmail_fetcher import _strip_html
 
 
 # ── _extract_amount ────────────────────────────────────────────────────────────
@@ -85,6 +86,126 @@ class TestExtractAmountJPY:
         amount, currency = _extract_amount("請求金額 980 JPY")
         assert amount == Decimal("980")
         assert currency == "JPY"
+
+
+class TestExtractAmountGBP:
+    def test_pound_symbol(self):
+        amount, currency = _extract_amount("£9.99 per month")
+        assert amount == Decimal("9.99")
+        assert currency == "GBP"
+
+    def test_gbp_prefix(self):
+        amount, currency = _extract_amount("GBP 14.99 charged")
+        assert amount == Decimal("14.99")
+        assert currency == "GBP"
+
+    def test_gbp_suffix(self):
+        amount, currency = _extract_amount("You were charged 7.99 GBP")
+        assert amount == Decimal("7.99")
+        assert currency == "GBP"
+
+
+class TestExtractAmountKRW:
+    def test_won_symbol(self):
+        amount, currency = _extract_amount("₩9,900 결제")
+        assert amount == Decimal("9900")
+        assert currency == "KRW"
+
+    def test_krw_suffix(self):
+        amount, currency = _extract_amount("결제금액: 9900 KRW")
+        assert amount == Decimal("9900")
+        assert currency == "KRW"
+
+
+class TestExtractAmountAdditionalCurrencies:
+    def test_sgd_prefix(self):
+        amount, currency = _extract_amount("SGD 5.99 billed")
+        assert amount == Decimal("5.99")
+        assert currency == "SGD"
+
+    def test_aud_prefix(self):
+        amount, currency = _extract_amount("AUD 12.99 monthly")
+        assert amount == Decimal("12.99")
+        assert currency == "AUD"
+
+    def test_hkd_prefix(self):
+        amount, currency = _extract_amount("HK$78 subscription")
+        assert amount == Decimal("78")
+        assert currency == "HKD"
+
+    def test_cad_prefix(self):
+        amount, currency = _extract_amount("CA$14.99 per month")
+        assert amount == Decimal("14.99")
+        assert currency == "CAD"
+
+
+class TestExtractAmountChineseFormats:
+    def test_yuan_suffix(self):
+        amount, currency = _extract_amount("月費 150元")
+        assert amount == Decimal("150")
+        assert currency == "TWD"
+
+    def test_yuan_suffix_with_space(self):
+        amount, currency = _extract_amount("合計 299 元")
+        assert amount == Decimal("299")
+        assert currency == "TWD"
+
+    def test_yuan_suffix_with_decimal(self):
+        amount, currency = _extract_amount("費用 99.00元")
+        assert amount == Decimal("99.00")
+        assert currency == "TWD"
+
+    def test_chinese_label_heti(self):
+        amount, currency = _extract_amount("合計：299")
+        assert amount == Decimal("299")
+        assert currency == "TWD"
+
+    def test_chinese_label_jine(self):
+        amount, currency = _extract_amount("金額:150")
+        assert amount == Decimal("150")
+        assert currency == "TWD"
+
+    def test_chinese_label_feiyong(self):
+        amount, currency = _extract_amount("訂閱費用：490")
+        assert amount == Decimal("490")
+        assert currency == "TWD"
+
+    def test_xintaibei_prefix(self):
+        amount, currency = _extract_amount("新台幣 320 元")
+        assert amount == Decimal("320")
+        assert currency == "TWD"
+
+    def test_yuan_no_false_positive_on_word(self):
+        # 元素 (element) must NOT match
+        amount, currency = _extract_amount("共有3元素組成")
+        assert amount is None
+
+    def test_yuan_comma_thousands(self):
+        amount, currency = _extract_amount("費用 1,200元")
+        assert amount == Decimal("1200")
+        assert currency == "TWD"
+
+
+class TestExtractAmountContextAnchored:
+    def test_total_label_whole_dollar(self):
+        amount, currency = _extract_amount("Total: $9")
+        assert amount == Decimal("9")
+        assert currency == "USD"
+
+    def test_amount_due_label(self):
+        amount, currency = _extract_amount("Amount Due: $50.00")
+        assert amount == Decimal("50.00")
+        assert currency == "USD"
+
+    def test_charged_label(self):
+        amount, currency = _extract_amount("You were charged: $25")
+        assert amount == Decimal("25")
+        assert currency == "USD"
+
+    def test_payment_label(self):
+        amount, currency = _extract_amount("Payment: $14.99")
+        assert amount == Decimal("14.99")
+        assert currency == "USD"
 
 
 class TestExtractAmountEdgeCases:
@@ -214,3 +335,60 @@ class TestParseReceipt:
         assert result is not None
         assert result.service_name == "Spotify"
         assert result.amount == Decimal("99")
+
+    def test_chinese_yuan_body(self):
+        email = _make_email(
+            subject="訂閱確認",
+            body_text="本月費用 150元，感謝訂閱。",
+            sender="billing@kktv.me",
+        )
+        result = parse_receipt(email)
+        assert result is not None
+        assert result.amount == Decimal("150")
+        assert result.currency == "TWD"
+
+    def test_gbp_body(self):
+        email = _make_email(
+            subject="Your Subscription Invoice",
+            body_text="Total: £9.99",
+            sender="billing@nordvpn.com",
+        )
+        result = parse_receipt(email)
+        assert result is not None
+        assert result.amount == Decimal("9.99")
+        assert result.currency == "GBP"
+        assert result.service_name == "NordVPN"
+
+
+# ── _strip_html HTML entity decoding ──────────────────────────────────────────
+
+
+class TestStripHtml:
+    def test_dollar_numeric_entity(self):
+        assert "$" in _strip_html("&#36;9.99")
+
+    def test_dollar_hex_entity(self):
+        assert "$" in _strip_html("&#x24;9.99")
+
+    def test_pound_entity(self):
+        assert "£" in _strip_html("&pound;9.99")
+
+    def test_yen_entity(self):
+        assert "¥" in _strip_html("&yen;1200")
+
+    def test_euro_entity(self):
+        assert "€" in _strip_html("&euro;9.99")
+
+    def test_won_entity(self):
+        assert "₩" in _strip_html("&won;9900")
+
+    def test_strips_html_tags(self):
+        result = _strip_html("<td>NT$150</td>")
+        assert "<td>" not in result
+        assert "NT$150" in result
+
+    def test_entity_decoded_amount_extractable(self):
+        decoded = _strip_html("<td>&#36;9.99</td>")
+        amount, currency = _extract_amount(decoded)
+        assert amount == Decimal("9.99")
+        assert currency == "USD"
