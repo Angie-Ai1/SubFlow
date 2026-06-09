@@ -31,5 +31,9 @@ class Settings(BaseSettings):
     google_token_path: str = "token.json"
     gmail_target_address: str = ""
 
+    # Scheduler / notifications
+    notify_days_advance: int = 3
+    cron_notification_hour: int = 9
+
 
 settings = Settings()
