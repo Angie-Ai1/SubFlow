@@ -246,6 +246,17 @@ class TestExtractServiceName:
         # accounts.google.com ends with google.com → "Google"
         assert _extract_service_name("no-reply@accounts.google.com", "") == "Google"
 
+    def test_cctld_domain_extracts_brand_not_tld(self):
+        # shop.brand.com.au → multi-part TLD (.com.au) should be skipped, brand extracted
+        assert _extract_service_name("no-reply@shop.amazon.com.au", "") == "Amazon"
+
+    def test_multiple_amounts_selects_maximum(self):
+        # Email has subtotal + tax + total; should return the total (maximum)
+        from app.parsers.receipt_parser import _extract_amount
+        amount, currency = _extract_amount("Subtotal $8.99  Tax $0.90  Total $9.89")
+        assert amount == Decimal("9.89")
+        assert currency == "USD"
+
 
 # ── _parse_date ────────────────────────────────────────────────────────────────
 

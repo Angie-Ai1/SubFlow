@@ -164,6 +164,12 @@ _SENDER_MAP: dict[str, str] = {
     "gash.com.tw": "Gash",
 }
 
+_KNOWN_MULTI_TLDS = frozenset({
+    "com.tw", "net.tw", "org.tw",
+    "co.jp", "co.uk", "co.nz", "co.kr",
+    "com.au", "com.hk", "com.sg",
+})
+
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
@@ -194,30 +200,34 @@ def parse_receipt(email: dict[str, Any]) -> ParsedReceipt | None:
 
 def _extract_amount(text: str) -> tuple[Decimal | None, str]:
     for pattern, currency in _AMOUNT_PATTERNS:
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
-            raw = match.group(1).replace(",", "")
+        raws = re.findall(pattern, text, re.IGNORECASE)
+        if not raws:
+            continue
+        amounts = []
+        for raw in raws:
             try:
-                return Decimal(raw), currency
+                amounts.append(Decimal(raw.replace(",", "")))
             except InvalidOperation:
                 continue
+        if amounts:
+            return max(amounts), currency
     return None, ""
 
 
 def _extract_service_name(sender: str, subject: str) -> str:
-    # Try known sender domain first
     domain_match = re.search(r"@([\w.-]+)", sender)
     if domain_match:
         domain = domain_match.group(1).lower()
         for key, name in _SENDER_MAP.items():
-            if domain.endswith(key):
+            if domain == key or domain.endswith(f".{key}"):
                 return name
-        # Fallback: capitalise the second-level domain
+        # Fallback: capitalise brand domain, skip multi-part TLDs (e.g. .com.tw, .co.uk)
         parts = domain.split(".")
+        if len(parts) >= 3 and f"{parts[-2]}.{parts[-1]}" in _KNOWN_MULTI_TLDS:
+            return parts[-3].capitalize()
         if len(parts) >= 2:
             return parts[-2].capitalize()
 
-    # Try to extract service name from subject (first capitalised word group)
     subject_match = re.match(r"([A-Z][A-Za-z0-9+\s]{1,30}?)(?:\s+receipt|\s+invoice|\s+payment|$)", subject)
     if subject_match:
         return subject_match.group(1).strip()

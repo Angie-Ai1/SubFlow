@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.parsers.gmail_auth import get_gmail_service
@@ -9,6 +10,10 @@ from database.models import BillingRecord, RecordSource, Subscription
 from utils.logger_config import get_logger
 
 logger = get_logger(__name__)
+
+
+class _ContentDuplicate(Exception):
+    """Raised when a billing record with identical (sub, date, amount) already exists."""
 
 
 @dataclass
@@ -63,10 +68,14 @@ def run_gmail_import(db: Session, max_results: int = 2000) -> ImportResult:
                 logger.debug("Duplicate gmail_message_id=%s, skipping", receipt.message_id)
                 continue
 
-            proposed = _save_receipt(db, receipt)
-            if proposed:
-                _proposed[proposed.subscription_id] = proposed
-            result.inserted += 1
+            try:
+                proposed = _save_receipt(db, receipt)
+                if proposed:
+                    _proposed[proposed.subscription_id] = proposed
+                result.inserted += 1
+            except _ContentDuplicate:
+                result.skipped_duplicate += 1
+                logger.debug("Content duplicate skipped for message_id=%s", receipt.message_id)
 
         db.commit()
     except Exception:
@@ -95,8 +104,25 @@ def _is_duplicate(db: Session, message_id: str) -> bool:
     ) is not None
 
 
+def _is_content_duplicate(db: Session, subscription_id: int, billed_at, amount: Decimal) -> bool:
+    """Secondary dedup: catch the same bill arriving from a forwarded/resent email."""
+    billed_date = billed_at.date() if hasattr(billed_at, "date") else billed_at
+    return (
+        db.query(BillingRecord)
+        .filter(
+            BillingRecord.subscription_id == subscription_id,
+            func.date(BillingRecord.billed_at) == billed_date,
+            BillingRecord.amount == float(amount),
+        )
+        .first()
+    ) is not None
+
+
 def _save_receipt(db: Session, receipt: ParsedReceipt) -> ProposedChange | None:
     subscription, is_existing = _find_or_create_subscription(db, receipt)
+
+    if is_existing and _is_content_duplicate(db, subscription.id, receipt.billed_at, receipt.amount):
+        raise _ContentDuplicate()
 
     proposed = None
     if is_existing and subscription.is_active:

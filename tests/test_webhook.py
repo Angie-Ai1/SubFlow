@@ -114,6 +114,20 @@ class TestWebhookSignature:
         )
         assert resp.status_code == 422
 
+    def test_empty_signature_header_returns_400(self, client):
+        # Header present but blank — should be rejected before reaching the parser
+        with patch("app.webhook.router.parser", new=_TEST_PARSER):
+            resp = client.post(
+                "/webhook/callback",
+                content=_EMPTY_EVENTS_BODY,
+                headers={
+                    "x-line-signature": "",
+                    "content-type": "application/json",
+                },
+            )
+        assert resp.status_code == 400
+        assert "Missing signature" in resp.json()["detail"]
+
     def test_tampered_body_returns_400(self, client):
         original_body = _EMPTY_EVENTS_BODY
         sig = _sign(original_body)

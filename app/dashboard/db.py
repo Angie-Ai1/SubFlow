@@ -2,7 +2,7 @@ from datetime import date as _date
 
 import pandas as pd
 import streamlit as st
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, select
 
 from database.models import BillingCycle, BillingRecord, Subscription
 from database.session import SessionLocal
@@ -15,27 +15,34 @@ def load_subscriptions() -> pd.DataFrame:
         if not subs:
             return pd.DataFrame()
 
-        # latest billed_at per subscription
-        max_rows = db.execute(
+        # Latest billing record per subscription — subquery JOIN (2 queries total)
+        latest_sq = (
             select(
                 BillingRecord.subscription_id,
                 func.max(BillingRecord.billed_at).label("max_at"),
-            ).group_by(BillingRecord.subscription_id)
+            )
+            .group_by(BillingRecord.subscription_id)
+            .subquery()
+        )
+        latest_rows = db.execute(
+            select(
+                BillingRecord.subscription_id,
+                BillingRecord.raw_subject,
+                latest_sq.c.max_at,
+            )
+            .join(
+                latest_sq,
+                and_(
+                    BillingRecord.subscription_id == latest_sq.c.subscription_id,
+                    BillingRecord.billed_at == latest_sq.c.max_at,
+                )
+            )
         ).all()
-        max_at = {r.subscription_id: r.max_at for r in max_rows}
 
-        # raw_subject for the latest billing per subscription
+        max_at = {r.subscription_id: r.max_at for r in latest_rows}
         subject: dict[int, str] = {}
-        if max_at:
-            conds = [
-                and_(BillingRecord.subscription_id == sid, BillingRecord.billed_at == mat)
-                for sid, mat in max_at.items()
-            ]
-            for rec in db.execute(
-                select(BillingRecord.subscription_id, BillingRecord.raw_subject)
-                .where(or_(*conds))
-            ).all():
-                subject.setdefault(rec.subscription_id, rec.raw_subject or "")
+        for r in latest_rows:
+            subject.setdefault(r.subscription_id, r.raw_subject or "")
 
         return pd.DataFrame([
             {

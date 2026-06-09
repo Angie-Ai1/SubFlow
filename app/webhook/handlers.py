@@ -17,6 +17,8 @@ from utils.logger_config import get_logger
 
 logger = get_logger(__name__)
 
+_MAX_INPUT_LEN = 100
+
 _WELCOME = (
     "歡迎使用 SubFlow 訂閱管理！\n\n"
     "📋 訂閱清單 — 查看所有啟用中訂閱\n"
@@ -96,6 +98,16 @@ def handle_unfollow(event: UnfollowEvent, db: Session) -> None:
 def handle_text_message(event: MessageEvent, db: Session, api: MessagingApi) -> None:
     assert isinstance(event.message, TextMessageContent)
     text = event.message.text.strip()
+
+    if len(text) > _MAX_INPUT_LEN:
+        api.reply_message(
+            ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[_msg("輸入內容過長，請使用下方按鈕操作。", menu=True)],
+            )
+        )
+        return
+
     message = _dispatch_command(text, db)
 
     api.reply_message(

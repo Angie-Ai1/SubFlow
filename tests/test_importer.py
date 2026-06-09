@@ -19,12 +19,13 @@ def _email(
     subject: str = "Netflix Monthly Charge NT$150",
     sender: str = "billing@netflix.com",
     body_text: str = "",
+    date: str = "Mon, 01 Jan 2026 00:00:00 +0000",
 ) -> dict:
     return {
         "message_id": message_id,
         "subject": subject,
         "sender": sender,
-        "date": "Mon, 01 Jan 2026 00:00:00 +0000",
+        "date": date,
         "body_text": body_text,
     }
 
@@ -81,8 +82,12 @@ class TestDeduplication:
         assert result.inserted == 0
         assert db_session.query(BillingRecord).count() == 1
 
-    def test_different_message_ids_both_inserted(self, db_session):
-        emails = [_email(message_id="msg001"), _email(message_id="msg002")]
+    def test_different_message_ids_different_dates_both_inserted(self, db_session):
+        # Different dates → different billing months, both should be inserted
+        emails = [
+            _email(message_id="msg001", date="Mon, 01 Jan 2026 00:00:00 +0000"),
+            _email(message_id="msg002", date="Sun, 01 Feb 2026 00:00:00 +0000"),
+        ]
         result = _run(db_session, emails)
 
         assert result.inserted == 2
@@ -93,8 +98,8 @@ class TestDeduplication:
         result = _run(
             db_session,
             [
-                _email(message_id="msg001"),  # duplicate
-                _email(message_id="msg002"),  # new
+                _email(message_id="msg001"),  # duplicate (message_id)
+                _email(message_id="msg002", date="Sun, 01 Feb 2026 00:00:00 +0000"),  # new (different date)
             ],
         )
 
@@ -204,11 +209,29 @@ class TestMultipleServices:
         assert db_session.query(BillingRecord).count() == 2
 
     def test_same_service_multiple_bills_share_one_subscription(self, db_session):
+        # Different dates → legitimate monthly recurrence, both should be inserted
         emails = [
             _email(message_id="m1", subject="Netflix NT$150", sender="billing@netflix.com"),
-            _email(message_id="m2", subject="Netflix NT$150", sender="billing@netflix.com"),
+            _email(
+                message_id="m2",
+                subject="Netflix NT$150",
+                sender="billing@netflix.com",
+                date="Mon, 01 Feb 2026 00:00:00 +0000",
+            ),
         ]
         _run(db_session, emails)
 
         assert db_session.query(Subscription).count() == 1
         assert db_session.query(BillingRecord).count() == 2
+
+    def test_content_duplicate_different_message_id_skipped(self, db_session):
+        # Same date + same amount but different message_id (forwarded/resent) → deduped
+        emails = [
+            _email(message_id="m1", subject="Netflix NT$150"),
+            _email(message_id="m2", subject="Netflix NT$150"),
+        ]
+        result = _run(db_session, emails)
+
+        assert result.inserted == 1
+        assert result.skipped_duplicate == 1
+        assert db_session.query(BillingRecord).count() == 1
