@@ -62,7 +62,10 @@ select = [
     "B",   # flake8-bugbear
     "UP",  # pyupgrade
 ]
-ignore = ["E501"]  # line length enforced by black
+ignore = [
+    "E501",  # line length enforced by black
+    "B008",  # FastAPI Depends() in function signatures is the standard pattern
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app", "utils"]

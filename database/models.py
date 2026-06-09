@@ -16,8 +16,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database.base import Base
 
-
 # ── Enums ─────────────────────────────────────────────────────────────────────
+
 
 class BillingCycle(str, enum.Enum):
     weekly = "weekly"
@@ -33,6 +33,7 @@ class RecordSource(str, enum.Enum):
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
+
 
 class Subscription(Base):
     __tablename__ = "subscriptions"

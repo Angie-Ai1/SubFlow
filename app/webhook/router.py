@@ -1,3 +1,4 @@
+from database.session import get_db
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.webhooks.models import FollowEvent, MessageEvent, TextMessageContent, UnfollowEvent
@@ -5,7 +6,6 @@ from sqlalchemy.orm import Session
 
 from app.webhook.handlers import handle_follow, handle_text_message, handle_unfollow
 from app.webhook.line_client import get_messaging_api, parser
-from database.session import get_db
 from utils.logger_config import get_logger
 
 logger = get_logger(__name__)
@@ -28,7 +28,7 @@ async def callback(
         events = parser.parse(body.decode(), x_line_signature)
     except InvalidSignatureError:
         logger.warning("LINE webhook: invalid signature")
-        raise HTTPException(status_code=400, detail="Invalid signature")
+        raise HTTPException(status_code=400, detail="Invalid signature") from None
 
     api = get_messaging_api()
 

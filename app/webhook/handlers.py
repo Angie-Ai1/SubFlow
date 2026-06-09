@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 
+from database.models import LineUser, Subscription
 from linebot.v3.messaging import (
     MessageAction,
     MessagingApi,
@@ -12,7 +13,6 @@ from linebot.v3.webhooks.models import FollowEvent, MessageEvent, TextMessageCon
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from database.models import LineUser, Subscription
 from utils.logger_config import get_logger
 
 logger = get_logger(__name__)
@@ -20,18 +20,18 @@ logger = get_logger(__name__)
 _MAX_INPUT_LEN = 100
 
 # ── Command keywords & quick reply labels ─────────────────────────────────────
-_CMD_LIST     = "訂閱清單"
+_CMD_LIST = "訂閱清單"
 _CMD_UPCOMING = "即將到期"
-_CMD_SEARCH   = "搜尋"
-_CMD_DISABLE  = "停用"
-_CMD_HELP     = "說明"
-_CMD_MENU     = "選單"
+_CMD_SEARCH = "搜尋"
+_CMD_DISABLE = "停用"
+_CMD_HELP = "說明"
+_CMD_MENU = "選單"
 
-_LBL_LIST     = "📋 訂閱清單"
+_LBL_LIST = "📋 訂閱清單"
 _LBL_UPCOMING = "⏰ 即將到期"
-_LBL_SEARCH   = "🔍 搜尋訂閱"
-_LBL_DISABLE  = "⏸ 停用訂閱"
-_LBL_HELP     = "❓ 使用說明"
+_LBL_SEARCH = "🔍 搜尋訂閱"
+_LBL_DISABLE = "⏸ 停用訂閱"
+_LBL_HELP = "❓ 使用說明"
 
 _WELCOME = (
     "歡迎使用 SubFlow 訂閱管理！\n\n"
@@ -60,11 +60,11 @@ def _help_text() -> str:
 def _main_quick_reply() -> QuickReply:
     return QuickReply(
         items=[
-            QuickReplyItem(action=MessageAction(label=_LBL_LIST,     text=_CMD_LIST)),
+            QuickReplyItem(action=MessageAction(label=_LBL_LIST, text=_CMD_LIST)),
             QuickReplyItem(action=MessageAction(label=_LBL_UPCOMING, text=_CMD_UPCOMING)),
-            QuickReplyItem(action=MessageAction(label=_LBL_SEARCH,   text=_CMD_SEARCH)),
-            QuickReplyItem(action=MessageAction(label=_LBL_DISABLE,  text=_CMD_DISABLE)),
-            QuickReplyItem(action=MessageAction(label=_LBL_HELP,     text=_CMD_HELP)),
+            QuickReplyItem(action=MessageAction(label=_LBL_SEARCH, text=_CMD_SEARCH)),
+            QuickReplyItem(action=MessageAction(label=_LBL_DISABLE, text=_CMD_DISABLE)),
+            QuickReplyItem(action=MessageAction(label=_LBL_HELP, text=_CMD_HELP)),
         ]
     )
 
@@ -74,6 +74,7 @@ def _msg(text: str, *, menu: bool = False) -> TextMessage:
 
 
 # ── FollowEvent ───────────────────────────────────────────────────────────────
+
 
 def handle_follow(event: FollowEvent, db: Session, api: MessagingApi) -> None:
     uid = event.source.user_id
@@ -98,6 +99,7 @@ def handle_follow(event: FollowEvent, db: Session, api: MessagingApi) -> None:
 
 # ── UnfollowEvent ─────────────────────────────────────────────────────────────
 
+
 def handle_unfollow(event: UnfollowEvent, db: Session) -> None:
     uid = event.source.user_id
     user = db.query(LineUser).filter(LineUser.line_user_id == uid).first()
@@ -108,6 +110,7 @@ def handle_unfollow(event: UnfollowEvent, db: Session) -> None:
 
 
 # ── MessageEvent ──────────────────────────────────────────────────────────────
+
 
 def handle_text_message(event: MessageEvent, db: Session, api: MessagingApi) -> None:
     assert isinstance(event.message, TextMessageContent)
@@ -154,7 +157,7 @@ def _dispatch_command(text: str, db: Session) -> TextMessage:
     # ── 搜尋 <keyword> ────────────────────────────────────────────────────────
     if normalized.startswith(_CMD_SEARCH) or normalized.startswith("search"):
         prefix = _CMD_SEARCH if normalized.startswith(_CMD_SEARCH) else "search"
-        keyword = text[len(prefix):].strip()
+        keyword = text[len(prefix) :].strip()
         if not keyword:
             return _msg(f"請輸入搜尋關鍵字，範例：\n{_CMD_SEARCH} Netflix", menu=True)
         return _msg(_search_subscriptions(db, keyword))
@@ -162,16 +165,19 @@ def _dispatch_command(text: str, db: Session) -> TextMessage:
     # ── 停用 <keyword> ────────────────────────────────────────────────────────
     if normalized.startswith(_CMD_DISABLE) or normalized.startswith("disable"):
         prefix = _CMD_DISABLE if normalized.startswith(_CMD_DISABLE) else "disable"
-        keyword = text[len(prefix):].strip()
+        keyword = text[len(prefix) :].strip()
         if not keyword:
             return _msg(f"請輸入要停用的訂閱名稱，範例：\n{_CMD_DISABLE} Netflix", menu=True)
         return _msg(_deactivate_subscription(db, keyword), menu=True)
 
     # ── 未知指令 ──────────────────────────────────────────────────────────────
-    return _msg(f"未知指令：「{text}」\n\n輸入「{_CMD_HELP}」查看可用指令，或點選下方按鈕。", menu=True)
+    return _msg(
+        f"未知指令：「{text}」\n\n輸入「{_CMD_HELP}」查看可用指令，或點選下方按鈕。", menu=True
+    )
 
 
 # ── Query helpers ─────────────────────────────────────────────────────────────
+
 
 def _build_subscription_list(db: Session) -> str:
     subs = (

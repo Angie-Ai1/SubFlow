@@ -1,11 +1,11 @@
 from datetime import date, timedelta
 
+from database.models import LineUser, Subscription
 from linebot.v3.messaging import PushMessageRequest, TextMessage
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.webhook.line_client import get_messaging_api
-from database.models import LineUser, Subscription
 from utils.logger_config import get_logger
 
 logger = get_logger(__name__)
@@ -27,7 +27,9 @@ def run_daily_billing_check(db: Session) -> None:
     )
 
     if not upcoming:
-        logger.info("billing check: no subscriptions due within %d days", settings.notify_days_advance)
+        logger.info(
+            "billing check: no subscriptions due within %d days", settings.notify_days_advance
+        )
         return
 
     active_users = db.query(LineUser).filter(LineUser.is_active.is_(True)).all()

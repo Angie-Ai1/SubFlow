@@ -59,16 +59,9 @@ def fetch_receipt_emails(
 
 
 def _fetch_full_message(service, message_id: str) -> dict[str, Any]:
-    msg = (
-        service.users()
-        .messages()
-        .get(userId="me", id=message_id, format="full")
-        .execute()
-    )
+    msg = service.users().messages().get(userId="me", id=message_id, format="full").execute()
 
-    headers: dict[str, str] = {
-        h["name"]: h["value"] for h in msg["payload"].get("headers", [])
-    }
+    headers: dict[str, str] = {h["name"]: h["value"] for h in msg["payload"].get("headers", [])}
 
     return {
         "message_id": message_id,

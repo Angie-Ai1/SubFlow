@@ -1,12 +1,13 @@
 from dataclasses import dataclass, field
+from decimal import Decimal
 
+from database.models import BillingRecord, RecordSource, Subscription
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.parsers.gmail_auth import get_gmail_service
 from app.parsers.gmail_fetcher import fetch_receipt_emails
 from app.parsers.receipt_parser import ParsedReceipt, parse_receipt
-from database.models import BillingRecord, RecordSource, Subscription
 from utils.logger_config import get_logger
 
 logger = get_logger(__name__)
@@ -96,11 +97,10 @@ def run_gmail_import(db: Session, max_results: int = 2000) -> ImportResult:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _is_duplicate(db: Session, message_id: str) -> bool:
     return (
-        db.query(BillingRecord)
-        .filter(BillingRecord.gmail_message_id == message_id)
-        .first()
+        db.query(BillingRecord).filter(BillingRecord.gmail_message_id == message_id).first()
     ) is not None
 
 
@@ -121,7 +121,9 @@ def _is_content_duplicate(db: Session, subscription_id: int, billed_at, amount: 
 def _save_receipt(db: Session, receipt: ParsedReceipt) -> ProposedChange | None:
     subscription, is_existing = _find_or_create_subscription(db, receipt)
 
-    if is_existing and _is_content_duplicate(db, subscription.id, receipt.billed_at, receipt.amount):
+    if is_existing and _is_content_duplicate(
+        db, subscription.id, receipt.billed_at, receipt.amount
+    ):
         raise _ContentDuplicate()
 
     proposed = None
@@ -158,16 +160,10 @@ def _save_receipt(db: Session, receipt: ParsedReceipt) -> ProposedChange | None:
     return proposed
 
 
-def _find_or_create_subscription(
-    db: Session, receipt: ParsedReceipt
-) -> tuple[Subscription, bool]:
+def _find_or_create_subscription(db: Session, receipt: ParsedReceipt) -> tuple[Subscription, bool]:
     """Return (subscription, is_existing). Creates a stub if not found."""
     name_lower = receipt.service_name.lower()
-    subscription = (
-        db.query(Subscription)
-        .filter(Subscription.name.ilike(f"%{name_lower}%"))
-        .first()
-    )
+    subscription = db.query(Subscription).filter(Subscription.name.ilike(f"%{name_lower}%")).first()
 
     if subscription:
         return subscription, True

@@ -16,8 +16,8 @@ _db_url = settings.database_url or (
 
 engine = create_engine(
     _db_url,
-    pool_pre_ping=True,   # drops stale connections automatically
-    pool_recycle=3600,    # recycle connections every hour
+    pool_pre_ping=True,  # drops stale connections automatically
+    pool_recycle=3600,  # recycle connections every hour
     echo=(settings.app_env == "development"),
 )
 

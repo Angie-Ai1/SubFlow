@@ -1,4 +1,4 @@
-"""
+r"""
 Local Gmail scan CLI — runs outside Docker, connects to localhost:3307.
 
 Usage:
@@ -6,6 +6,7 @@ Usage:
     .venv\Scripts\python.exe scripts\gmail_scan.py --max 200
     .venv\Scripts\python.exe scripts\gmail_scan.py --dry-run
 """
+
 import argparse
 import os
 import sys
@@ -35,6 +36,7 @@ def main() -> None:
 
     # Load .env manually so credentials are available
     from dotenv import load_dotenv
+
     load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
     # Re-apply host override after dotenv (dotenv may set MYSQL_HOST=db from .env)
@@ -49,6 +51,7 @@ def main() -> None:
     engine = create_engine(db_url, pool_pre_ping=True)
 
     from sqlalchemy import text
+
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
@@ -65,6 +68,7 @@ def main() -> None:
     Session = sessionmaker(bind=engine, autocommit=False, autoflush=False)
     with Session() as db:
         from app.parsers.importer import run_gmail_import
+
         print(f"[Gmail] Starting scan (max={args.max}) — browser may open for OAuth…")
         result = run_gmail_import(db, max_results=args.max)
 
@@ -91,11 +95,15 @@ def _run_dry(max_results: int) -> None:
         receipt = parse_receipt(email)
         if receipt:
             parsed += 1
-            print(f"  [OK] {receipt.service_name:25s} {receipt.amount:>10} {receipt.currency}  [{receipt.billed_at.date()}]  {receipt.raw_subject[:50]}")
+            print(
+                f"  [OK] {receipt.service_name:25s} {receipt.amount:>10} {receipt.currency}  [{receipt.billed_at.date()}]  {receipt.raw_subject[:50]}"
+            )
         else:
             no_amount += 1
 
-    print(f"\n[DRY-RUN] {len(emails)} fetched | {parsed} parseable | {no_amount} skipped (no amount)")
+    print(
+        f"\n[DRY-RUN] {len(emails)} fetched | {parsed} parseable | {no_amount} skipped (no amount)"
+    )
 
 
 if __name__ == "__main__":

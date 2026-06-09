@@ -3,13 +3,13 @@
 Uses SQLite in-memory DB (via conftest.db_session).
 Gmail service and fetcher are mocked — no network or OAuth flow required.
 """
+
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-from app.parsers.importer import run_gmail_import
 from database.models import BillingCycle, BillingRecord, Subscription
 
+from app.parsers.importer import run_gmail_import
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -99,7 +99,9 @@ class TestDeduplication:
             db_session,
             [
                 _email(message_id="msg001"),  # duplicate (message_id)
-                _email(message_id="msg002", date="Sun, 01 Feb 2026 00:00:00 +0000"),  # new (different date)
+                _email(
+                    message_id="msg002", date="Sun, 01 Feb 2026 00:00:00 +0000"
+                ),  # new (different date)
             ],
         )
 

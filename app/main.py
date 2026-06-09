@@ -3,15 +3,13 @@ from contextlib import asynccontextmanager
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
-from fastapi import FastAPI
+from database.session import SessionLocal, check_connection, get_db
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
-from fastapi import Depends
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.webhook.router import router as webhook_router
-from database.session import SessionLocal, check_connection, get_db
 from utils.logger_config import get_logger
 
 logger = get_logger(__name__)
@@ -36,6 +34,7 @@ def _check_required_env() -> None:
 
 def _with_db(fn):
     """Wrap a scheduled job so it receives a fresh DB session and closes it on exit."""
+
     def _job():
         db = SessionLocal()
         try:
@@ -44,6 +43,7 @@ def _with_db(fn):
             logger.error("scheduled job %s failed: %s", fn.__name__, exc)
         finally:
             db.close()
+
     _job.__name__ = fn.__name__
     return _job
 
@@ -115,6 +115,7 @@ async def health() -> dict:
 async def gmail_import(db: Session = Depends(get_db)) -> dict:
     """Manually trigger a Gmail receipt import run."""
     from app.parsers.importer import run_gmail_import
+
     result = run_gmail_import(db)
     return {
         "total_fetched": result.total_fetched,

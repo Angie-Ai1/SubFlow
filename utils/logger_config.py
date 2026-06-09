@@ -8,19 +8,19 @@ Usage:
 """
 
 import logging
+import os
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from dotenv import load_dotenv
-import os
 
 load_dotenv()
 
 _LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 _LOG_DIR = Path("logs")
 _LOG_FILE = _LOG_DIR / "subflow.log"
-_MAX_BYTES = 10 * 1024 * 1024   # 10 MB per file
+_MAX_BYTES = 10 * 1024 * 1024  # 10 MB per file
 _BACKUP_COUNT = 5
 
 _FORMATTER = logging.Formatter(

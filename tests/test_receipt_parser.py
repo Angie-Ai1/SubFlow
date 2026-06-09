@@ -2,19 +2,17 @@
 
 No DB or network required — all tests run against pure Python logic.
 """
+
+from datetime import UTC, datetime
 from decimal import Decimal
-from datetime import datetime, timezone
 
-import pytest
-
+from app.parsers.gmail_fetcher import _strip_html
 from app.parsers.receipt_parser import (
     _extract_amount,
     _extract_service_name,
     _parse_date,
     parse_receipt,
 )
-from app.parsers.gmail_fetcher import _strip_html
-
 
 # ── _extract_amount ────────────────────────────────────────────────────────────
 
@@ -253,6 +251,7 @@ class TestExtractServiceName:
     def test_multiple_amounts_selects_maximum(self):
         # Email has subtotal + tax + total; should return the total (maximum)
         from app.parsers.receipt_parser import _extract_amount
+
         amount, currency = _extract_amount("Subtotal $8.99  Tax $0.90  Total $9.89")
         assert amount == Decimal("9.89")
         assert currency == "USD"
@@ -275,15 +274,15 @@ class TestParseDate:
         assert dt.month == 6
 
     def test_invalid_date_falls_back_to_current_time(self):
-        before = datetime.now(timezone.utc)
+        before = datetime.now(UTC)
         dt = _parse_date("not-a-date-string")
-        after = datetime.now(timezone.utc)
+        after = datetime.now(UTC)
         assert before <= dt <= after
 
     def test_empty_date_string_falls_back(self):
-        before = datetime.now(timezone.utc)
+        before = datetime.now(UTC)
         dt = _parse_date("")
-        after = datetime.now(timezone.utc)
+        after = datetime.now(UTC)
         assert before <= dt <= after
 
 

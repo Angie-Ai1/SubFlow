@@ -1,6 +1,6 @@
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from email.utils import parsedate_to_datetime
 from typing import Any
@@ -35,7 +35,10 @@ _AMOUNT_PATTERNS: list[tuple[str, str]] = [
     ),
     # ── USD ───────────────────────────────────────────────────────────────────
     (r"(?:USD|US\$)\s*([\d,]+(?:\.\d{1,2})?)", "USD"),
-    (r"(?<![A-Za-z])\$\s*([\d,]+\.\d{2})\b", "USD"),  # $X.XX — not preceded by letter (avoids CA$/HK$/A$/S$/C$)
+    (
+        r"(?<![A-Za-z])\$\s*([\d,]+\.\d{2})\b",
+        "USD",
+    ),  # $X.XX — not preceded by letter (avoids CA$/HK$/A$/S$/C$)
     (r"([\d,]+(?:\.\d{1,2})?)\s*USD", "USD"),
     # Billing-label anchored $ — allows whole-dollar amounts (e.g. "Total: $9", "Total Amount：$1305")
     (
@@ -164,14 +167,24 @@ _SENDER_MAP: dict[str, str] = {
     "gash.com.tw": "Gash",
 }
 
-_KNOWN_MULTI_TLDS = frozenset({
-    "com.tw", "net.tw", "org.tw",
-    "co.jp", "co.uk", "co.nz", "co.kr",
-    "com.au", "com.hk", "com.sg",
-})
+_KNOWN_MULTI_TLDS = frozenset(
+    {
+        "com.tw",
+        "net.tw",
+        "org.tw",
+        "co.jp",
+        "co.uk",
+        "co.nz",
+        "co.kr",
+        "com.au",
+        "com.hk",
+        "com.sg",
+    }
+)
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
+
 
 def parse_receipt(email: dict[str, Any]) -> ParsedReceipt | None:
     """Return a ParsedReceipt or None if amount cannot be extracted."""
@@ -197,6 +210,7 @@ def parse_receipt(email: dict[str, Any]) -> ParsedReceipt | None:
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
+
 
 def _extract_amount(text: str) -> tuple[Decimal | None, str]:
     for pattern, currency in _AMOUNT_PATTERNS:
@@ -228,7 +242,9 @@ def _extract_service_name(sender: str, subject: str) -> str:
         if len(parts) >= 2:
             return parts[-2].capitalize()
 
-    subject_match = re.match(r"([A-Z][A-Za-z0-9+\s]{1,30}?)(?:\s+receipt|\s+invoice|\s+payment|$)", subject)
+    subject_match = re.match(
+        r"([A-Z][A-Za-z0-9+\s]{1,30}?)(?:\s+receipt|\s+invoice|\s+payment|$)", subject
+    )
     if subject_match:
         return subject_match.group(1).strip()
 
@@ -240,4 +256,4 @@ def _parse_date(date_str: str) -> datetime:
         return parsedate_to_datetime(date_str)
     except Exception:
         logger.warning("Could not parse date %r, using now()", date_str)
-        return datetime.now(timezone.utc)
+        return datetime.now(UTC)

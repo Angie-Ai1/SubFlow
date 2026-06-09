@@ -1,11 +1,8 @@
-from datetime import date as _date
-
 import pandas as pd
 import streamlit as st
-from sqlalchemy import and_, func, select
-
 from database.models import BillingCycle, BillingRecord, Subscription
 from database.session import SessionLocal
+from sqlalchemy import and_, func, select
 
 
 @st.cache_data(ttl=60)
@@ -29,13 +26,12 @@ def load_subscriptions() -> pd.DataFrame:
                 BillingRecord.subscription_id,
                 BillingRecord.raw_subject,
                 latest_sq.c.max_at,
-            )
-            .join(
+            ).join(
                 latest_sq,
                 and_(
                     BillingRecord.subscription_id == latest_sq.c.subscription_id,
                     BillingRecord.billed_at == latest_sq.c.max_at,
-                )
+                ),
             )
         ).all()
 
@@ -44,23 +40,25 @@ def load_subscriptions() -> pd.DataFrame:
         for r in latest_rows:
             subject.setdefault(r.subscription_id, r.raw_subject or "")
 
-        return pd.DataFrame([
-            {
-                "id": r.id,
-                "名稱": r.name,
-                "服務商": r.provider or "",
-                "週期": r.billing_cycle.value,
-                "金額": float(r.amount),
-                "幣別": r.currency,
-                "最近扣款": max_at.get(r.id),
-                "郵件主旨": subject.get(r.id, ""),
-                "下次扣款": r.next_billing_date,
-                "訂閱開始": r.subscribed_since,
-                "啟用": r.is_active,
-                "備註": r.note or "",
-            }
-            for r in subs
-        ])
+        return pd.DataFrame(
+            [
+                {
+                    "id": r.id,
+                    "名稱": r.name,
+                    "服務商": r.provider or "",
+                    "週期": r.billing_cycle.value,
+                    "金額": float(r.amount),
+                    "幣別": r.currency,
+                    "最近扣款": max_at.get(r.id),
+                    "郵件主旨": subject.get(r.id, ""),
+                    "下次扣款": r.next_billing_date,
+                    "訂閱開始": r.subscribed_since,
+                    "啟用": r.is_active,
+                    "備註": r.note or "",
+                }
+                for r in subs
+            ]
+        )
 
 
 @st.cache_data(ttl=60)
@@ -75,20 +73,24 @@ def load_billing_records() -> pd.DataFrame:
             .join(Subscription, BillingRecord.subscription_id == Subscription.id)
             .order_by(BillingRecord.billed_at.desc())
         ).all()
-        return pd.DataFrame([
-            {
-                "id": r.BillingRecord.id,
-                "subscription_id": r.BillingRecord.subscription_id,
-                "服務名稱": r.service_name,
-                "金額": float(r.BillingRecord.amount),
-                "幣別": r.BillingRecord.currency,
-                "扣款時間": r.BillingRecord.billed_at,
-                "類型": "一次性消費" if r.sub_billing_cycle == BillingCycle.one_time else "訂閱費",
-                "來源": r.BillingRecord.source.value,
-                "郵件主旨": r.BillingRecord.raw_subject or "",
-            }
-            for r in rows
-        ])
+        return pd.DataFrame(
+            [
+                {
+                    "id": r.BillingRecord.id,
+                    "subscription_id": r.BillingRecord.subscription_id,
+                    "服務名稱": r.service_name,
+                    "金額": float(r.BillingRecord.amount),
+                    "幣別": r.BillingRecord.currency,
+                    "扣款時間": r.BillingRecord.billed_at,
+                    "類型": (
+                        "一次性消費" if r.sub_billing_cycle == BillingCycle.one_time else "訂閱費"
+                    ),
+                    "來源": r.BillingRecord.source.value,
+                    "郵件主旨": r.BillingRecord.raw_subject or "",
+                }
+                for r in rows
+            ]
+        )
 
 
 def create_subscription(data: dict) -> int:

@@ -1,13 +1,12 @@
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config, pool
-
+import database.models  # noqa: F401 — ensures all models are registered on Base.metadata
 from alembic import context
+from database.base import Base
+from sqlalchemy import engine_from_config, pool
 
 # ── Project imports ───────────────────────────────────────────────────────────
 from app.config import settings
-from database.base import Base
-import database.models  # noqa: F401 — ensures all models are registered on Base.metadata
 
 # ── Alembic config ────────────────────────────────────────────────────────────
 config = context.config
@@ -18,7 +17,8 @@ if config.config_file_name is not None:
 # Inject DB URL from .env so alembic.ini stays credential-free
 config.set_main_option(
     "sqlalchemy.url",
-    settings.database_url or (
+    settings.database_url
+    or (
         f"mysql+pymysql://{settings.mysql_user}:{settings.mysql_password}"
         f"@{settings.mysql_host}:{settings.mysql_port}/{settings.mysql_database}"
     ),
@@ -28,6 +28,7 @@ target_metadata = Base.metadata
 
 
 # ── Migration runners ─────────────────────────────────────────────────────────
+
 
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")

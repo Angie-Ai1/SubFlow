@@ -4,6 +4,7 @@ Covers: valid signature → 200, invalid signature → 400, missing header → 4
 No real LINE channel credentials required — the module-level parser is patched
 with a known test secret for each signature test.
 """
+
 import base64
 import hashlib
 import hmac
@@ -11,14 +12,14 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
+from database.base import Base
+from database.session import get_db
 from fastapi.testclient import TestClient
 from linebot.v3.webhook import WebhookParser
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.main import app
-from database.base import Base
-from database.session import get_db
 
 # ── Test infrastructure ────────────────────────────────────────────────────────
 
@@ -54,9 +55,7 @@ def client():
 _TEST_PARSER = WebhookParser(TEST_SECRET)
 
 # Minimal valid LINE webhook payload — no events to dispatch, just validates plumbing
-_EMPTY_EVENTS_BODY = json.dumps(
-    {"destination": "Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "events": []}
-)
+_EMPTY_EVENTS_BODY = json.dumps({"destination": "Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "events": []})
 
 
 def _sign(body: str) -> str:
